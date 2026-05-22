@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Live2D Viewer - GF</title>
+<style>
+  body{margin:0;background:#1a1a2e;display:flex;height:100vh;font-family:Arial}
+  #list{width:260px;background:#16213e;color:#eee;overflow-y:auto;padding:12px}
+  #list h3{font-size:14px;margin:4px 0;color:#e94560}
+  select{width:100%;padding:6px;background:#0f3460;color:#eee;border:1px solid #533483;margin:6px 0}
+  button{width:100%;padding:8px;margin:4px 0;border:none;cursor:pointer;font-size:13px}
+  .btn-load{background:#e94560;color:#fff}
+  .btn-load:hover{background:#ff6b7a}
+  .btn-auto{background:#0f3460;color:#eee}
+  .btn-auto:hover{background:#1a4a7a}
+  #viewer{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+  #viewer canvas{max-width:100%;max-height:100%}
+  #info{font-size:11px;color:#888;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="list">
+  <h3>Girls Frontline Live2D</h3>
+  <select id="sel"></select>
+  <button class="btn-load" onclick="doLoad()">加载角色</button>
+  <button class="btn-auto" onclick="autoPlay()" id="autoBtn">自动轮播</button>
+  <div id="info">加载模型列表...</div>
+</div>
+<div id="viewer"></div>
+
+<script src="node_modules/pixi.js/dist/pixi.min.js"></script>
+<script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+
+<script>
+let models=[], app, model, autoTimer;
+const BASE = 'extracted/text/live2d';
+
+// Load cubism4 - wait for WASM (max 10s), then load anyway
+(function tryLoad(attempt) {
+  attempt = attempt || 0;
+  if (Live2DCubismCore && Live2DCubismCore._isStarted) {
+    var s = document.createElement('script');
+    s.src = 'node_modules/pixi-live2d-display/dist/cubism4.min.js';
+    s.onload = bootViewer;
+    document.head.appendChild(s);
+  } else if (attempt < 100) {
+    setTimeout(function() { tryLoad(attempt + 1); }, 100);
+  } else {
+    var s = document.createElement('script');
+    s.src = 'node_modules/pixi-live2d-display/dist/cubism4.min.js';
+    s.onload = bootViewer;
+    document.head.appendChild(s);
+  }
+})();
+
+function bootViewer() {
+  fetch('live2d_models.json').then(r=>r.json()).then(d=>{
+    models = d;
+    const sel = document.getElementById('sel');
+    d.forEach((m,i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = m;
+      sel.appendChild(o);
+    });
+    document.getElementById('info').textContent = '共 ' + d.length + ' 个角色';
+  });
+}
+
+function doLoad(){
+  if (!PIXI.live2d || !PIXI.live2d.Live2DModel) {
+    document.getElementById('info').textContent = 'Live2D 引擎未就绪';
+    return;
+  }
+  const name = models[document.getElementById('sel').value];
+  const info = document.getElementById('info');
+  info.textContent = '加载: ' + name;
+  if (app) { if(model) app.stage.removeChild(model); app.destroy(true,{children:true}); }
+  app = new PIXI.Application({resizeTo: document.getElementById('viewer'), backgroundAlpha: 0});
+  document.getElementById('viewer').innerHTML = '';
+  document.getElementById('viewer').appendChild(app.view);
+
+  PIXI.live2d.Live2DModel.from(BASE + '/' + name + '/model.model3.json').then(m => {
+    model = m;
+    // Auto-fit model to viewer
+    var maxW = app.view.width * 0.7;
+    var maxH = app.view.height * 0.85;
+    var s = Math.min(maxW / (m.width || 1), maxH / (m.height || 1), 0.5);
+    if (!s || s <= 0) s = 0.25;
+    m.scale.set(s);
+    m._origScale = s;
+    m.x = app.view.width / 2;
+    m.y = app.view.height / 2;
+    m.anchor.set(0.5, 0.5);
+    app.stage.addChild(m);
+    // 拖拽
+    var dragging = false, ox = 0, oy = 0;
+    m.eventMode = 'static';
+    m.cursor = 'grab';
+    m.on('pointerdown', function(e) {
+      dragging = true;
+      ox = e.data.global.x - m.x;
+      oy = e.data.global.y - m.y;
+      m.cursor = 'grabbing';
+    });
+    m.on('globalpointermove', function(e) {
+      if (!dragging) return;
+      m.x = e.data.global.x - ox;
+      m.y = e.data.global.y - oy;
+    });
+    m.on('pointerup', function() { dragging = false; m.cursor = 'grab'; clampModel(); });
+    m.on('pointerupoutside', function() { dragging = false; m.cursor = 'grab'; clampModel(); });
+    // 滚轮缩放
+    app.view.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      var ns = Math.max(0.05, Math.min(3, m.scale.x + (e.deltaY > 0 ? -0.1 : 0.1)));
+      m.scale.set(ns);
+      clampModel();
+    }, { passive: false });
+    // 边界约束：防止模型拖出视野
+    function clampModel() {
+      if (!m || !app) return;
+      var vw = app.view.width, vh = app.view.height;
+      var bw = m.width * m.scale.x * 0.5, bh = m.height * m.scale.y * 0.5;
+      var minX = -bw + vw * 0.1, maxX = vw + bw - vw * 0.1;
+      var minY = -bh + vh * 0.1, maxY = vh + bh - vh * 0.1;
+      if (maxX > minX) { m.x = Math.max(minX, Math.min(maxX, m.x)); }
+      if (maxY > minY) { m.y = Math.max(minY, Math.min(maxY, m.y)); }
+    }
+    info.textContent = name + ' OK';
+  }).catch(e => { info.textContent = '失败: ' + e.message; });
+  window.addEventListener('resize', function() {
+    if (model && app) {
+      model.x = app.view.width / 2;
+      model.y = app.view.height / 2;
+    }
+  });
+}
+
+let ai = 0;
+function autoPlay(){
+  if (autoTimer) { clearInterval(autoTimer); autoTimer=null; document.getElementById('autoBtn').textContent='自动轮播'; return; }
+  document.getElementById('autoBtn').textContent = '停止';
+  autoTimer = setInterval(() => { document.getElementById('sel').value=ai; doLoad(); ai=(ai+1)%models.length; }, 3000);
+  doLoad();
+}
+</script>
+</body>
+</html>

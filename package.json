@@ -1,0 +1,10 @@
+{
+  "name": "view-gf-live2d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Girls' Frontline Live2D model viewer",
+  "dependencies": {
+    "pixi.js": "^6.5.10",
+    "pixi-live2d-display": "^0.4.0"
+  }
+}
