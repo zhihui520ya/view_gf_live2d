@@ -1,5 +1,16 @@
 # View GF Live2D
 
+> （官方补药再跑路了，我还以为真见不到心心念念的枪娘了）
+
+> **⚠️ 免责声明：本仓库仅供学习研究使用，请于下载后 24 小时内删除所有提取的游戏资源文件。**
+> **游戏资源版权归原版权方（Sunborn / MICA Team）所有，请支持正版。**
+>
+> *If you are a representative of the copyright holder and believe this repository infringes upon your rights, please contact us and we will remove the content immediately.*
+
+---
+
+# View GF Live2D
+
 Girls' Frontline (少女前线) Live2D 角色模型浏览器。
 
 从游戏资源包中提取所有 Live2D 模型，在浏览器中浏览全部 440 个角色。
