@@ -63,12 +63,12 @@ npm install
 
 ```bash
 cd 服务器根目录
-python3 -m http.server 8080
+python3 -m http.server 34567
 ```
 
 ### 4. 打开浏览器
 
-访问 http://localhost:8080/live2d_viewer.html
+访问 http://localhost:34567/live2d_viewer.html
 
 ## 使用说明
 
